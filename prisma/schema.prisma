@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String       @id @default(cuid())
+  email          String       @unique
+  name           String?
+  passwordHash   String
+  createdAt      DateTime     @default(now())
+  monitors       Monitor[]
+  statusPages    StatusPage[]
+}
+
+model Monitor {
+  id            String   @id @default(cuid())
+  name          String
+  url           String
+  interval      Int      @default(300) // seconds between checks
+  status        String   @default("unknown") // up, down, degraded, unknown
+  lastCheckedAt DateTime?
+  createdAt     DateTime @default(now())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checks        Check[]
+  statusPageId  String?
+  statusPage    StatusPage? @relation(fields: [statusPageId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+}
+
+model Check {
+  id           String   @id @default(cuid())
+  statusCode   Int?
+  responseTime Int? // milliseconds
+  success      Boolean
+  message      String?
+  createdAt    DateTime @default(now())
+  monitorId    String
+  monitor      Monitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@index([monitorId, createdAt])
+}
+
+model StatusPage {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  description String?
+  isPublic    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  monitors    Monitor[]
+
+  @@index([userId])
+}
