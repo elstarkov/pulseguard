@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
+import { logError } from "@/lib/logger";
 
 interface Check {
   success: boolean;
@@ -20,19 +21,25 @@ export default async function PublicStatusPage({
 }) {
   const { slug } = await params;
 
-  const page = await prisma.statusPage.findUnique({
-    where: { slug },
-    include: {
-      monitors: {
-        include: {
-          checks: {
-            orderBy: { createdAt: "desc" },
-            take: 90,
+  let page;
+  try {
+    page = await prisma.statusPage.findUnique({
+      where: { slug },
+      include: {
+        monitors: {
+          include: {
+            checks: {
+              orderBy: { createdAt: "desc" },
+              take: 90,
+            },
           },
         },
       },
-    },
-  });
+    });
+  } catch (error) {
+    logError({ route: "status/[slug]", operation: "findStatusPage" }, error);
+    notFound();
+  }
 
   if (!page || !page.isPublic) {
     notFound();

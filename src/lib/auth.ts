@@ -2,6 +2,7 @@ import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import { prisma } from "./db";
+import { logError } from "./logger";
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
@@ -18,16 +19,24 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-        });
+        try {
+          const user = await prisma.user.findUnique({
+            where: { email: credentials.email },
+          });
 
-        if (!user) return null;
+          if (!user) return null;
 
-        const isValid = await compare(credentials.password, user.passwordHash);
-        if (!isValid) return null;
+          const isValid = await compare(
+            credentials.password,
+            user.passwordHash,
+          );
+          if (!isValid) return null;
 
-        return { id: user.id, email: user.email, name: user.name };
+          return { id: user.id, email: user.email, name: user.name };
+        } catch (error) {
+          logError({ route: "auth", operation: "authorize" }, error);
+          return null;
+        }
       },
     }),
   ],

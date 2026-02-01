@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { createMonitorSchema } from "@/lib/schemas";
+import { logError } from "@/lib/logger";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -11,21 +12,30 @@ export async function GET() {
   }
 
   const userId = (session.user as { id: string }).id;
-  const monitors = await prisma.monitor.findMany({
-    where: { userId },
-    include: {
-      checks: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-      },
-      _count: {
-        select: { checks: true },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
 
-  return NextResponse.json(monitors);
+  try {
+    const monitors = await prisma.monitor.findMany({
+      where: { userId },
+      include: {
+        checks: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+        _count: {
+          select: { checks: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return NextResponse.json(monitors);
+  } catch (error) {
+    logError({ route: "GET /api/monitors", operation: "findMonitors" }, error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(req: Request) {
@@ -50,9 +60,21 @@ export async function POST(req: Request) {
   }
 
   const userId = (session.user as { id: string }).id;
-  const monitor = await prisma.monitor.create({
-    data: { ...parsed.data, userId },
-  });
 
-  return NextResponse.json(monitor, { status: 201 });
+  try {
+    const monitor = await prisma.monitor.create({
+      data: { ...parsed.data, userId },
+    });
+
+    return NextResponse.json(monitor, { status: 201 });
+  } catch (error) {
+    logError(
+      { route: "POST /api/monitors", operation: "createMonitor" },
+      error,
+    );
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
+  }
 }

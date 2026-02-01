@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { updateMonitorSchema } from "@/lib/schemas";
+import { logError } from "@/lib/logger";
 
 export async function GET(
   _req: Request,
@@ -16,21 +17,32 @@ export async function GET(
   const { id } = await params;
   const userId = (session.user as { id: string }).id;
 
-  const monitor = await prisma.monitor.findFirst({
-    where: { id, userId },
-    include: {
-      checks: {
-        orderBy: { createdAt: "desc" },
-        take: 50,
+  try {
+    const monitor = await prisma.monitor.findFirst({
+      where: { id, userId },
+      include: {
+        checks: {
+          orderBy: { createdAt: "desc" },
+          take: 50,
+        },
       },
-    },
-  });
+    });
 
-  if (!monitor) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!monitor) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(monitor);
+  } catch (error) {
+    logError(
+      { route: "GET /api/monitors/[id]", operation: "findMonitor" },
+      error,
+    );
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
-
-  return NextResponse.json(monitor);
 }
 
 export async function PATCH(
@@ -60,17 +72,28 @@ export async function PATCH(
   const { id } = await params;
   const userId = (session.user as { id: string }).id;
 
-  const existing = await prisma.monitor.findFirst({ where: { id, userId } });
-  if (!existing) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  try {
+    const existing = await prisma.monitor.findFirst({ where: { id, userId } });
+    if (!existing) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const monitor = await prisma.monitor.update({
+      where: { id, userId },
+      data: parsed.data,
+    });
+
+    return NextResponse.json(monitor);
+  } catch (error) {
+    logError(
+      { route: "PATCH /api/monitors/[id]", operation: "updateMonitor" },
+      error,
+    );
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
-
-  const monitor = await prisma.monitor.update({
-    where: { id, userId },
-    data: parsed.data,
-  });
-
-  return NextResponse.json(monitor);
 }
 
 export async function DELETE(
@@ -85,12 +108,23 @@ export async function DELETE(
   const { id } = await params;
   const userId = (session.user as { id: string }).id;
 
-  const existing = await prisma.monitor.findFirst({ where: { id, userId } });
-  if (!existing) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  try {
+    const existing = await prisma.monitor.findFirst({ where: { id, userId } });
+    if (!existing) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    await prisma.monitor.delete({ where: { id, userId } });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    logError(
+      { route: "DELETE /api/monitors/[id]", operation: "deleteMonitor" },
+      error,
+    );
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
-
-  await prisma.monitor.delete({ where: { id, userId } });
-
-  return NextResponse.json({ success: true });
 }

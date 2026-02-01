@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
+import { logError, logInfo } from "@/lib/logger";
 
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
@@ -15,8 +16,22 @@ export async function GET(req: Request) {
     );
   }
 
-  const monitors = await prisma.monitor.findMany();
+  let monitors;
+  try {
+    monitors = await prisma.monitor.findMany();
+  } catch (error) {
+    logError(
+      { route: "GET /api/checks/run", operation: "findMonitors" },
+      error,
+    );
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
+  }
+
   const results = [];
+  let failed = 0;
 
   for (const monitor of monitors) {
     const start = Date.now();
@@ -44,30 +59,51 @@ export async function GET(req: Request) {
 
     const responseTime = Date.now() - start;
 
-    const check = await prisma.check.create({
-      data: {
+    try {
+      const check = await prisma.check.create({
+        data: {
+          monitorId: monitor.id,
+          statusCode,
+          responseTime,
+          success,
+          message,
+        },
+      });
+
+      const newStatus = success ? "up" : "down";
+      await prisma.monitor.update({
+        where: { id: monitor.id },
+        data: { status: newStatus, lastCheckedAt: new Date() },
+      });
+
+      results.push({
         monitorId: monitor.id,
-        statusCode,
+        name: monitor.name,
+        status: newStatus,
         responseTime,
-        success,
-        message,
-      },
-    });
-
-    const newStatus = success ? "up" : "down";
-    await prisma.monitor.update({
-      where: { id: monitor.id },
-      data: { status: newStatus, lastCheckedAt: new Date() },
-    });
-
-    results.push({
-      monitorId: monitor.id,
-      name: monitor.name,
-      status: newStatus,
-      responseTime,
-      checkId: check.id,
-    });
+        checkId: check.id,
+      });
+    } catch (error) {
+      failed++;
+      logError(
+        {
+          route: "GET /api/checks/run",
+          operation: "saveCheckResult",
+          monitorId: monitor.id,
+          monitorName: monitor.name,
+        },
+        error,
+      );
+    }
   }
+
+  logInfo({
+    route: "GET /api/checks/run",
+    operation: "cronSummary",
+    totalMonitors: monitors.length,
+    checked: results.length,
+    failed,
+  });
 
   return NextResponse.json({ checked: results.length, results });
 }
