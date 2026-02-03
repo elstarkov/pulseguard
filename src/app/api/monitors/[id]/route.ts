@@ -73,16 +73,19 @@ export async function PATCH(
   const userId = (session.user as { id: string }).id;
 
   try {
-    const existing = await prisma.monitor.findFirst({ where: { id, userId } });
-    if (!existing) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    const monitor = await prisma.monitor.update({
+    const { count } = await prisma.monitor.updateMany({
       where: { id, userId },
       data: parsed.data,
     });
 
+    if (count === 0) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const monitor = await prisma.monitor.findFirst({ where: { id, userId } });
+    if (!monitor) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     return NextResponse.json(monitor);
   } catch (error) {
     logError(
@@ -109,12 +112,13 @@ export async function DELETE(
   const userId = (session.user as { id: string }).id;
 
   try {
-    const existing = await prisma.monitor.findFirst({ where: { id, userId } });
-    if (!existing) {
+    const { count } = await prisma.monitor.deleteMany({
+      where: { id, userId },
+    });
+
+    if (count === 0) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-
-    await prisma.monitor.delete({ where: { id, userId } });
 
     return NextResponse.json({ success: true });
   } catch (error) {

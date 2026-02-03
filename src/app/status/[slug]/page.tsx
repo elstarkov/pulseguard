@@ -2,6 +2,8 @@ import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
 import { logError } from "@/lib/logger";
 
+export const revalidate = 60;
+
 interface Check {
   success: boolean;
   createdAt: Date;
@@ -29,6 +31,7 @@ export default async function PublicStatusPage({
         monitors: {
           include: {
             checks: {
+              select: { success: true, createdAt: true },
               orderBy: { createdAt: "desc" },
               take: 90,
             },
@@ -116,7 +119,7 @@ export default async function PublicStatusPage({
           </div>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-6 max-h-[calc(100vh-320px)] overflow-y-auto pr-2">
           {page.monitors.map((monitor: MonitorWithChecks) => {
             const uptime = getUptime(monitor);
             const bars = getUptimeBars(monitor);

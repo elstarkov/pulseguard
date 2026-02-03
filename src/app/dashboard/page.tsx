@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 import Link from "next/link";
 
@@ -34,23 +34,37 @@ export default function Dashboard() {
   const [showAdd, setShowAdd] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
 
-  const fetchMonitors = useCallback(async () => {
-    const res = await fetch("/api/monitors");
-    if (res.ok) {
-      setMonitors(await res.json());
-    }
-    setLoading(false);
-  }, []);
-
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/signin");
       return;
     }
-    if (status === "authenticated") {
-      fetchMonitors();
+    if (status !== "authenticated") {
+      return;
     }
-  }, [status, router, fetchMonitors]);
+
+    let cancelled = false;
+    const load = async () => {
+      const res = await fetch("/api/monitors");
+      if (cancelled) return;
+      if (res.ok) {
+        setMonitors(await res.json());
+      }
+      setLoading(false);
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, router]);
+
+  const reloadMonitors = async () => {
+    const res = await fetch("/api/monitors");
+    if (res.ok) {
+      setMonitors(await res.json());
+    }
+  };
 
   async function handleAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -67,7 +81,7 @@ export default function Dashboard() {
     });
     if (res.ok) {
       setShowAdd(false);
-      fetchMonitors();
+      reloadMonitors();
     }
     setAddLoading(false);
   }
@@ -75,7 +89,7 @@ export default function Dashboard() {
   async function handleDelete(id: string) {
     if (!confirm("Delete this monitor?")) return;
     await fetch(`/api/monitors/${id}`, { method: "DELETE" });
-    fetchMonitors();
+    reloadMonitors();
   }
 
   function statusColor(s: string) {
@@ -220,9 +234,9 @@ export default function Dashboard() {
                       {statusLabel(m.status)}
                     </div>
                     <div className="text-xs text-zinc-500 mt-0.5">
-                      {m.checks[0]
-                        ? `${m.checks[0].responseTime}ms`
-                        : "No checks yet"}
+                      {m.checks[0]?.responseTime
+                        ? `${m.checks[0]?.responseTime}ms`
+                        : "—"}
                     </div>
                   </div>
                   <div className="flex gap-2">

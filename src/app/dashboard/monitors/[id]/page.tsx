@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 interface Check {
@@ -32,25 +32,32 @@ export default function MonitorDetail() {
   const [monitor, setMonitor] = useState<Monitor | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchMonitor = useCallback(async () => {
-    const res = await fetch(`/api/monitors/${params.id}`);
-    if (res.ok) {
-      setMonitor(await res.json());
-    } else {
-      router.push("/dashboard");
-    }
-    setLoading(false);
-  }, [params.id, router]);
-
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/signin");
       return;
     }
-    if (status === "authenticated") {
-      fetchMonitor();
+    if (status !== "authenticated") {
+      return;
     }
-  }, [status, router, fetchMonitor]);
+
+    let cancelled = false;
+    const load = async () => {
+      const res = await fetch(`/api/monitors/${params.id}`);
+      if (cancelled) return;
+      if (res.ok) {
+        setMonitor(await res.json());
+      } else {
+        router.push("/dashboard");
+      }
+      setLoading(false);
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, router, params.id]);
 
   if (loading || !monitor) {
     return (
@@ -165,7 +172,7 @@ export default function MonitorDetail() {
                       check.success ? "bg-emerald-400" : "bg-red-400"
                     }`}
                     style={{ height: `${Math.max(height, 2)}%` }}
-                    title={`${check.responseTime}ms - ${check.success ? "OK" : "Failed"}`}
+                    title={`${check.responseTime ?? "—"}ms - ${check.success ? "OK" : "Failed"}`}
                   />
                 );
               })}
@@ -183,7 +190,7 @@ export default function MonitorDetail() {
               No checks recorded yet. Checks will appear after the first run.
             </p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
               {monitor.checks.map((check) => (
                 <div
                   key={check.id}

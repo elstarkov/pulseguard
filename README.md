@@ -67,7 +67,7 @@ npm run lint         # Run ESLint
 4. Deploy — Vercel builds and ships automatically
 5. Run migrations against Supabase: `npx prisma migrate deploy`
 
-Monitor checks run every 5 minutes via Vercel Cron (configured in `vercel.json`).
+Monitor checks run on set intervals via Vercel Cron (configured in `vercel.json` but requires a pay plan) OR via cron-job.org (free).
 
 ## Project structure
 
